@@ -16,9 +16,9 @@ python patreon_crawler.py [--download-dir <output-dir>]
 
 ### Arguments
 
-| Argument       | Description                                                                                                           |
-|----------------|-----------------------------------------------------------------------------------------------------------------------|
-| `creator`      | A comma seperated list of all creators to crawl                                                                       |
-| `cookie-file`  | The path to the chrome-cookie file to use for authentication. User `auto` to try to determine the file automatically. |
-| `download-dir` | The base directory to download media to. All files will be locaed in `<download-dir>/<creator>`                       |
+| Argument       | Description                                                                                                                          |
+|----------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| `creator`      | A comma seperated list of all creators to crawl                                                                                      |
+| `cookie-file`  | The path to the chrome-cookie file to use for authentication. User `auto` to try to determine the file automatically.                |
+| `download-dir` | The base directory to download media to. All files will be located in `<download-dir>/<creator>`. Defaults to `./downloads` if unset |
 
