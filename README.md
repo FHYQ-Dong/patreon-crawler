@@ -3,7 +3,7 @@ Simple tool to download all media from a patreon creator. Available on `win` onl
 ## Usage
 
 ```python
-python patreon_crawler.py - -creator < creator1, creator2, ... > --cookie - file < path - to - chrome - cookie - file > --download - dir < output - dir >
+python patreon_crawler.py --creator < creator1, creator2, ... > --cookie - file < path - to - chrome - cookie - file > --download - dir < output - dir >
 ```
 
 <br>
