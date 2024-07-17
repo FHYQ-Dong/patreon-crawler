@@ -32,7 +32,12 @@ class PatreonCrawler:
 
     @property
     def _total_accessible_posts(self) -> int:
-        return self._total_posts - self._num_posts_inaccessible
+        accessible = self._total_posts if self._config.download_inaccessible else self._total_posts - self._num_posts_inaccessible
+
+        if self._config.max_posts:
+            accessible = min(accessible, self._config.max_posts)
+
+        return accessible
 
     def __init__(self, config: CrawlerConfig) -> None:
         self._config = config
@@ -41,25 +46,39 @@ class PatreonCrawler:
         self._total_posts: int = 0
         self.campaign_id: str = self._get_campaign_id()
         self.loaded_posts: list[PatreonPost] = []
-        self.downloader = PostDownloader(f"{config.download_dir}/{config.creator}")
+        self.downloader = PostDownloader(
+            f"{config.download_dir}/{config.creator}",
+            max_in_flight=config.max_parallel_downloads
+        )
 
     def _load_next_page(self) -> bool:
+        remaining_posts_to_download = self._config.max_posts - len(self.loaded_posts)
+        if self._config.max_posts and remaining_posts_to_download <= 0:
+            return False
+
         url = self._build_url(self._next_cursor)
         request = requests.get(url, headers={"Cookie": self._cookie})
         response = PatreonData.from_json(request.json())
+        response_posts = response.posts
 
         posts = []
-        for post in response.posts:
-            if post.current_user_can_view:
+        for post in response_posts:
+            if post.current_user_can_view or self._config.download_inaccessible:
                 posts.append(post)
             else:
                 print(f"Ignoring post {post.title}, as it is inaccessible")
 
-        self._num_posts_inaccessible += len(response.posts) - len(posts)
+        if self._config.max_posts and len(posts) > remaining_posts_to_download:
+            posts = posts[:remaining_posts_to_download]
 
-        self.loaded_posts.extend(response.posts)
+        self._num_posts_inaccessible += len(response_posts) - len(posts)
+
+        self.loaded_posts.extend(posts)
         self._total_posts = response.total_posts
         self._next_cursor = response.cursor_next
+
+        if self._config.max_posts and len(self.loaded_posts) >= self._config.max_posts:
+            return False
 
         return self._next_cursor is not None
 

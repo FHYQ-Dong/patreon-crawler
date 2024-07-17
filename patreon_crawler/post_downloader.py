@@ -8,10 +8,15 @@ from patreon_crawler.patreon_data import PatreonPost, PatreonMedia
 
 
 class PostDownloader:
-    MAX_IN_FLIGHT = 10
+    _DEFAULT_MAX_IN_FLIGHT = 10
 
-    def __init__(self, download_dir: str):
+    @property
+    def max_in_flight(self):
+        return self._max_in_flight or self._DEFAULT_MAX_IN_FLIGHT
+
+    def __init__(self, download_dir: str, max_in_flight: int = _DEFAULT_MAX_IN_FLIGHT):
         self.download_dir = download_dir
+        self._max_in_flight = max_in_flight
         self.num_in_flight = 0
         self.total_to_download = 0
         self.downloaded = 0
@@ -40,10 +45,10 @@ class PostDownloader:
             self.process_queue()
 
     def process_queue(self):
-        while self.queue and self.num_in_flight < self.MAX_IN_FLIGHT:
+        while self.queue and self.num_in_flight < self.max_in_flight:
             self.num_in_flight += 1
             media = self.queue.pop(0)
-            thread = Thread(target=self.download_media, args=(media,))
+            thread = Thread(target=self.download_media, args=(media,), daemon=True)
             thread.start()
 
     def download(self, posts: list[PatreonPost]):
@@ -52,7 +57,7 @@ class PostDownloader:
         self.queue.extend(medias)
         self.total_to_download += len(medias)
 
-        print(f"Enqueued {len(medias)} downloads")
+        print(f"Enqueued {len(medias)} downloads from {len(posts)} posts")
         self.process_queue()
 
     def wait_finish(self):

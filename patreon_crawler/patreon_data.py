@@ -27,11 +27,12 @@ class PatreonMedia:
     def from_json(json_: dict) -> PatreonMedia:
         attributes = json_.get("attributes", {})
         dimensions = obj_get(attributes, "metadata.dimensions")
+        url = obj_get(attributes, "download_url") or obj_get(attributes, "image_urls.original")
         return PatreonMedia(
             id=json_.get("id"),
             height=dimensions.get("h"),
             width=dimensions.get("w"),
-            url=attributes.get("download_url"),
+            url=url,
             mimetype=attributes.get("mimetype")
         )
 

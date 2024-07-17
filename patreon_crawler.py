@@ -8,7 +8,12 @@ from patreon_crawler.crawler_config import CrawlerConfig
 PARSER = argparse.ArgumentParser(description="Crawl Patreon for creators")
 PARSER.add_argument("--creator", type=str, help="The handle of the creator to crawl")
 PARSER.add_argument("--cookie-file", type=str, help="The path to the cookies file")
-PARSER.add_argument("--download-dir", type=str, help="The directory to download the posts to")
+PARSER.add_argument("--download-dir", type=str, help="The base directory to download the posts to")
+PARSER.add_argument("--max-posts", type=int, help="Limit the maximum number of posts to download")
+PARSER.add_argument("--download-inaccessible", action="store_true", default=False,
+                    help="Download inaccessible posts (blurred)")
+PARSER.add_argument("--max-parallel-downloads", type=int, default=10,
+                    help="The maximum number of parallel downloads to run at once")
 
 
 def parse_args() -> list[CrawlerConfig]:
@@ -17,6 +22,9 @@ def parse_args() -> list[CrawlerConfig]:
     config_creator = args.creator
     cookies_file = args.cookie_file
     download_dir = args.download_dir or "./downloads"
+    max_posts = args.max_posts
+    download_inaccessible = args.download_inaccessible
+    max_parallel_downloads = args.max_parallel_downloads
 
     if not config_creator:
         config_creator = input("Enter creator name (multiple comma-separated): ")
@@ -35,7 +43,16 @@ def parse_args() -> list[CrawlerConfig]:
 
     cookies = get_cookies(cookies_file, 'patreon.com')
 
-    return [CrawlerConfig(creator, cookies, download_dir) for creator in parsed_creator]
+    return [
+        CrawlerConfig(
+            creator,
+            cookies,
+            download_dir,
+            max_posts=max_posts,
+            download_inaccessible=download_inaccessible,
+            max_parallel_downloads=max_parallel_downloads
+        ) for creator in parsed_creator
+    ]
 
 
 def main() -> None:
