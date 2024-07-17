@@ -19,16 +19,20 @@ class PatreonMedia:
     url: str
     mimetype: str
 
+    @property
+    def valid(self) -> bool:
+        return self.height > 0 and self.width > 0 and self.url and self.mimetype
+
     @staticmethod
     def from_json(json_: dict) -> PatreonMedia:
-        attributes = json_["attributes"]
-        dimensions = attributes["metadata"]["dimensions"]
+        attributes = json_.get("attributes", {})
+        dimensions = obj_get(attributes, "metadata.dimensions")
         return PatreonMedia(
-            id=json_["id"],
-            height=dimensions["h"],
-            width=dimensions["w"],
-            url=attributes["image_urls"]["original"],
-            mimetype=attributes["mimetype"]
+            id=json_.get("id"),
+            height=dimensions.get("h"),
+            width=dimensions.get("w"),
+            url=attributes.get("download_url"),
+            mimetype=attributes.get("mimetype")
         )
 
 
@@ -38,6 +42,10 @@ class PatreonPost:
     title: str
     media: list[PatreonMedia]
     current_user_can_view: bool
+
+    @property
+    def has_media(self) -> bool:
+        return len(self.media) > 0
 
     @staticmethod
     def from_json(json_: dict, media: list[PatreonMedia]) -> PatreonPost:
@@ -62,7 +70,8 @@ class PatreonData:
     def from_json(json_: dict) -> PatreonData:
         data = json_["data"]
         included = json_["included"]
-        media = [PatreonMedia.from_json(post) for post in included if post["type"] == "media"]
+        received_media = [PatreonMedia.from_json(post) for post in included if post["type"] == "media"]
+        media = [media for media in received_media if media.valid]
         posts = [PatreonPost.from_json(post, media) for post in data if post["type"] == "post"]
 
         return PatreonData(

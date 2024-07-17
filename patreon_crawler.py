@@ -1,7 +1,8 @@
 import argparse
 import os
 
-from patreon_crawler.crawler import run_crawl
+from patreon_crawler.cookie_extractor import get_cookies
+from patreon_crawler.crawler import PatreonCrawler
 from patreon_crawler.crawler_config import CrawlerConfig
 
 PARSER = argparse.ArgumentParser(description="Crawl Patreon for creators")
@@ -10,7 +11,7 @@ PARSER.add_argument("--cookie-file", type=str, help="The path to the cookies fil
 PARSER.add_argument("--download-dir", type=str, help="The directory to download the posts to")
 
 
-def main() -> None:
+def parse_args() -> list[CrawlerConfig]:
     args = PARSER.parse_args()
 
     config_creator = args.creator
@@ -32,11 +33,20 @@ def main() -> None:
 
     parsed_creator = config_creator.split(",")
 
-    for creator in parsed_creator:
-        print("Crawling", creator)
-        config = CrawlerConfig(creator, cookies_file, download_dir)
+    cookies = get_cookies(cookies_file, 'patreon.com')
 
-        run_crawl(config)
+    return [CrawlerConfig(creator, cookies, download_dir) for creator in parsed_creator]
+
+
+def main() -> None:
+    configs = parse_args()
+
+    for config in configs:
+        print("Crawling", config.creator)
+
+        crawler = PatreonCrawler(config)
+        crawler.run()
+
         print("\nDone\n")
 
 
