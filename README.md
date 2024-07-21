@@ -16,9 +16,12 @@ python patreon_crawler.py [--download-dir <output-dir>]
 
 ### Arguments
 
-| Argument       | Description                                                                                                                          |
-|----------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `creator`      | A comma seperated list of all creators to crawl                                                                                      |
-| `cookie-file`  | The path to the chrome-cookie file to use for authentication. Use `auto` to try to determine the file automatically.                 |
-| `download-dir` | The base directory to download media to. All files will be located in `<download-dir>/<creator>`. Defaults to `./downloads` if unset |
+| Argument                 | Description                                                                                                                          |
+|--------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| `creator`                | A comma seperated list of all creators to crawl                                                                                      |
+| `cookie-file`            | The path to the chrome-cookie file to use for authentication. Use `auto` to try to determine the file automatically.                 |
+| `download-dir`           | The base directory to download media to. All files will be located in `<download-dir>/<creator>`. Defaults to `./downloads` if unset |
+| `max-posts`              | The maximum number of posts to crawl.                                                                                                |
+| `download-inaccessible`  | Whether to download media that is inaccessible (blurred images)                                                                      |
+| `max-parallel-downloads` | The maximum downloads to run in parallel                                                                                             |
 
