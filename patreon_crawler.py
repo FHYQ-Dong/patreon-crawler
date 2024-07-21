@@ -5,7 +5,7 @@ from patreon_crawler.cookie_extractor import get_cookies
 from patreon_crawler.crawler import PatreonCrawler
 from patreon_crawler.crawler_config import CrawlerConfig
 
-PARSER = argparse.ArgumentParser(description="Crawl Patreon for creators")
+PARSER = argparse.ArgumentParser(description="A media crawler for Patreon")
 PARSER.add_argument("--creator", type=str, help="The handle of the creator to crawl")
 PARSER.add_argument("--cookie-file", type=str, help="The path to the cookies file")
 PARSER.add_argument("--download-dir", type=str, help="The base directory to download the posts to")

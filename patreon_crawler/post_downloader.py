@@ -34,7 +34,7 @@ class PostDownloader:
                 file.write(request.content)
 
             self.downloaded += 1
-            print(f"({self.downloaded} / {self.total_to_download}) Downloaded {media.id}.{mime} from {media.url}")
+            print(f"({self.downloaded} / {self.total_to_download}) Downloaded {media.id}.{mime}")
 
         try:
             run()

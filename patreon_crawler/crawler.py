@@ -11,6 +11,9 @@ _PATREON_CAMPAIGN_REGEX = r"patreon-media\/p\/campaign\/(\d+)\/."
 
 
 class PatreonCrawler:
+    """
+    A media crawler for Patreon creators
+    """
     _default_request_query = {
         "include": "attachments,images,media",
         "fields[post]": "teaser_text,current_user_can_view,post_metadata,published_at,post_type,title,url,view_count",
@@ -45,11 +48,22 @@ class PatreonCrawler:
         self._num_posts_inaccessible: int = 0
         self._total_posts: int = 0
         self.campaign_id: str = self._get_campaign_id()
+        """
+        The creators campaign ID (unique identifier for the API)
+        """
+
         self.loaded_posts: list[PatreonPost] = []
+        """
+        The posts that have been loaded
+        """
+
         self.downloader = PostDownloader(
             f"{config.download_dir}/{config.creator}",
             max_in_flight=config.max_parallel_downloads
         )
+        """
+        The downloader for posts
+        """
 
     def _load_next_page(self) -> bool:
         remaining_posts_to_download = self._config.max_posts - len(self.loaded_posts)
@@ -98,16 +112,28 @@ class PatreonCrawler:
 
         return f"{self._patreon_api_url}?{'&'.join([f'{k}={v}' for k, v in mod_filter.items()])}"
 
-    def load(self) -> None:
+    def load(self) -> list[PatreonPost]:
+        """
+        Loads all posts from the creator
+
+        :return: A list of PatreonPost objects
+        """
         while self._load_next_page():
             print(f"Loaded {len(self.loaded_posts)} / {self._total_accessible_posts} posts")
         print(f"Loaded {len(self.loaded_posts)} / {self._total_accessible_posts} posts")
+        return self.loaded_posts
 
     def download(self) -> None:
+        """
+        Downloads all media from the loaded posts
+        """
         self.downloader.download(self.loaded_posts)
         self.downloader.wait_finish()
 
     def run(self) -> None:
+        """
+        Loads all posts and downloads the media
+        """
         self.load()
         self.download()
 
