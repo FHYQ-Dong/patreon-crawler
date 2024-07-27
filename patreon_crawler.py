@@ -22,7 +22,7 @@ def parse_args() -> list[CrawlerConfig]:
     config_creator = args.creator
     cookies_file = args.cookie_file
     download_dir = args.download_dir or "./downloads"
-    max_posts = args.max_posts
+    max_posts = args.max_posts or 0
     download_inaccessible = args.download_inaccessible
     max_parallel_downloads = args.max_parallel_downloads
 
@@ -42,6 +42,9 @@ def parse_args() -> list[CrawlerConfig]:
     parsed_creator = config_creator.split(",")
 
     cookies = get_cookies(cookies_file, 'patreon.com')
+
+    if cookies is None:
+        raise ValueError(f"Failed to extract cookies from {cookies_file}")
 
     return [
         CrawlerConfig(

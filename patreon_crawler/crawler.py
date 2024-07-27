@@ -136,5 +136,3 @@ class PatreonCrawler:
         """
         self.load()
         self.download()
-
-
