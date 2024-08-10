@@ -1,11 +1,12 @@
 import argparse
+from argparse import RawTextHelpFormatter
 import os
 
 from patreon_crawler.cookie_extractor import get_cookies
 from patreon_crawler.crawler import PatreonCrawler
 from patreon_crawler.crawler_config import CrawlerConfig
 
-PARSER = argparse.ArgumentParser(description="A media crawler for Patreon")
+PARSER = argparse.ArgumentParser(description="A media crawler for Patreon", formatter_class=RawTextHelpFormatter)
 PARSER.add_argument("--creator", type=str, help="The handle of the creator to crawl")
 PARSER.add_argument("--cookie-file", type=str, help="The path to the cookies file")
 PARSER.add_argument("--download-dir", type=str, help="The base directory to download the posts to")
@@ -14,6 +15,12 @@ PARSER.add_argument("--download-inaccessible", action="store_true", default=Fals
                     help="Download inaccessible posts (blurred)")
 PARSER.add_argument("--max-parallel-downloads", type=int, default=10,
                     help="The maximum number of parallel downloads to run at once")
+PARSER.add_argument("--grouping-strategy", type=str, default="dynamic",
+                    help="Controls how posts are grouped into directories. Options: \n\n"
+                         "\tnone: All posts are downloaded into the same directory\n"
+                         "\tall: Each post is downloaded into a separate directory\n"
+                         "\tdynamic (default): Posts with more than one file are grouped into a directory"
+                    )
 
 
 def parse_args() -> list[CrawlerConfig]:
@@ -25,6 +32,7 @@ def parse_args() -> list[CrawlerConfig]:
     max_posts = args.max_posts or 0
     download_inaccessible = args.download_inaccessible
     max_parallel_downloads = args.max_parallel_downloads
+    grouping_strategy = args.grouping_strategy
 
     if not config_creator:
         config_creator = input("Enter creator name (multiple comma-separated): ")
@@ -53,7 +61,8 @@ def parse_args() -> list[CrawlerConfig]:
             download_dir,
             max_posts=max_posts,
             download_inaccessible=download_inaccessible,
-            max_parallel_downloads=max_parallel_downloads
+            max_parallel_downloads=max_parallel_downloads,
+            post_grouping_strategy=grouping_strategy
         ) for creator in parsed_creator
     ]
 

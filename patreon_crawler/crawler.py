@@ -2,7 +2,6 @@ import re
 
 import requests
 
-from patreon_crawler.cookie_extractor import get_cookies
 from patreon_crawler.crawler_config import CrawlerConfig
 from patreon_crawler.patreon_data import PatreonData, PatreonPost
 from patreon_crawler.post_downloader import PostDownloader
@@ -59,7 +58,8 @@ class PatreonCrawler:
 
         self.downloader = PostDownloader(
             f"{config.download_dir}/{config.creator}",
-            max_in_flight=config.max_parallel_downloads
+            max_in_flight=config.max_parallel_downloads,
+            grouping_strategy=config.post_grouping_strategy
         )
         """
         The downloader for posts
