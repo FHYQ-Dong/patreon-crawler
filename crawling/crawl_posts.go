@@ -195,6 +195,8 @@ func CrawlPosts(client *patreon.Client, baseDownloadDir string, downloadInaccess
 			}
 
 			postsDownloaded++
+		} else {
+			fmt.Printf("[%d] Skipping post '%s' (inaccessible media)\n", postsDownloaded, post.Title)
 		}
 
 		// This can be done independent to downloading
