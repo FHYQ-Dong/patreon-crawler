@@ -4,34 +4,17 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"io"
-	"net/http"
+	"net/url"
 	"os"
-	"regexp"
-	"slices"
+	"os/user"
+	"path/filepath"
 	"strings"
-	"time"
 
-	"patreon-crawler/patreon"
+	"patreon-crawler/crawling"
 	"patreon-crawler/patreon/api"
 )
 
 var version = "version unknown"
-
-var windowsReservedNames = []string{
-	"CON", "PRN", "AUX", "NUL",
-	"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-	"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-}
-
-var invalidChars = regexp.MustCompile(`[<>:"/\\|?*\x00]`)
-
-type GroupingStrategy string
-
-const (
-	GroupingStrategyNone   GroupingStrategy = "none"
-	GroupingStrategyByPost GroupingStrategy = "by-post"
-)
 
 var argCreatorID string
 var argCookie string
@@ -50,28 +33,120 @@ func init() {
 	flag.Parse()
 }
 
-func isGroupingStrategy(strategy GroupingStrategy) bool {
+func isGroupingStrategy(strategy crawling.GroupingStrategy) bool {
 	switch strategy {
-	case GroupingStrategyNone, GroupingStrategyByPost:
+	case crawling.GroupingStrategyNone, crawling.GroupingStrategyByPost:
 		return true
 	default:
 		return false
 	}
 }
 
-func getCookie() (string, error) {
-	if argCookie != "" {
-		return strings.TrimSpace(argCookie), nil
+func cookieCacheFile() (string, error) {
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
+	err = os.MkdirAll(tokenCacheDir, 0700)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(tokenCacheDir,
+		url.QueryEscape("patreon.cookie")), nil
+}
+
+func saveCookieToFile(cookie string) error {
+	cookieFile, err := cookieCacheFile()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(cookieFile, []byte(cookie), 0600)
+}
+
+func readCookieFromFile() (string, error) {
+	cookieFile, err := cookieCacheFile()
+	if err != nil {
+		return "", err
 	}
 
-	fmt.Println("Please enter your cookie from the patreon website: ")
-	reader := bufio.NewReader(os.Stdin)
-	cookieString, err := reader.ReadString('\n')
+	cookie, err := os.ReadFile(cookieFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to read cookie: %w", err)
+		return "", err
 	}
-	cookieString = cookieString[:len(cookieString)-1]
-	return strings.TrimSpace(cookieString), nil
+	return string(cookie), nil
+}
+
+func readCookieFromStdin() (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	cookie, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(cookie), nil
+}
+
+func getAPIClientFromStdIn() (*api.Client, string, error) {
+	var apiClient *api.Client
+	var cookie string
+	var err error
+	authenticated := false
+
+	for !authenticated {
+		fmt.Println("Please enter your cookie from the patreon website: ")
+		cookie, err = readCookieFromStdin()
+		if err != nil {
+			return nil, "", err
+		}
+		apiClient = api.NewClient(cookie)
+		authenticated, err = apiClient.IsAuthenticated()
+		if err != nil {
+			return nil, "", err
+		}
+		if !authenticated {
+			fmt.Println("Unable to authenticate with the provided cookie. Please try again.")
+		}
+	}
+
+	return apiClient, cookie, nil
+}
+
+func getAPIClient() (*api.Client, error) {
+	if argCookie != "" {
+		apiClient := api.NewClient(argCookie)
+		authenticated, err := apiClient.IsAuthenticated()
+		if err != nil {
+			return nil, err
+		}
+		if authenticated {
+			return apiClient, nil
+		}
+		return nil, fmt.Errorf("failed to authenticate with provided cookie via --cookie")
+	}
+
+	cookie, err := readCookieFromFile()
+	if err == nil {
+		apiClient := api.NewClient(cookie)
+		authenticated, err := apiClient.IsAuthenticated()
+		if err != nil {
+			return nil, err
+		}
+		if authenticated {
+			return apiClient, nil
+		}
+	}
+
+	apiClient, cookie, err := getAPIClientFromStdIn()
+	if err != nil {
+		return nil, err
+	}
+
+	err = saveCookieToFile(cookie)
+	if err != nil {
+		return nil, err
+	}
+
+	return apiClient, nil
 }
 
 func getDownloadDir() (string, error) {
@@ -89,108 +164,6 @@ func getDownloadDir() (string, error) {
 	return downloadDir, nil
 }
 
-func sanitizeFilename(name string) string {
-	name = invalidChars.ReplaceAllString(name, "_")
-	name = strings.TrimRight(name, " .")
-	upper := strings.ToUpper(name)
-	if slices.Contains(windowsReservedNames, upper) {
-		name = "_" + name
-	}
-	if len(name) > 255 {
-		name = name[:255]
-	}
-	if name == "" {
-		name = "_"
-	}
-	return name
-}
-
-func getFileExtension(mimeType string) (string, error) {
-	// This is a very quick and dirty method, but it should work here
-	mimeTypeSplits := strings.Split(mimeType, "/")
-	if len(mimeTypeSplits) != 2 {
-		return "", fmt.Errorf("invalid mime type: %s", mimeType)
-	}
-	return mimeTypeSplits[1], nil
-}
-
-func downloadMedia(media patreon.Media, downloadDir string) (string, error) {
-	extension, err := getFileExtension(media.MimeType)
-	if err != nil {
-		return "", err
-	}
-	downloadedFilePath := fmt.Sprintf("%s/%s.%s", downloadDir, media.ID, extension)
-
-	if _, err := os.Stat(downloadedFilePath); err == nil {
-		fmt.Printf("\t- skiped %s (already downloaded)\n", media.ID)
-		return downloadedFilePath, nil
-	}
-
-	response, err := http.Get(media.DownloadURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to download media: %w", err)
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to download media: %s", response.Status)
-	}
-
-	tempDownloadFilePath := downloadedFilePath + ".tmp"
-
-	out, err := os.Create(tempDownloadFilePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to create file: %w", err)
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, response.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to write file: %w", err)
-	}
-
-	out.Close()
-
-	err = os.Rename(tempDownloadFilePath, downloadedFilePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to rename file: %w", err)
-	}
-
-	fmt.Printf("\t- saved %s\n", media.ID)
-	return downloadedFilePath, nil
-}
-
-func adjustFileTime(file string, time time.Time) error {
-	err := os.Chtimes(file, time, time)
-	if err != nil {
-		return fmt.Errorf("failed to adjust file time: %w", err)
-	}
-	return nil
-}
-
-func downloadPost(downloadDirectory string, post patreon.Post) error {
-	if len(post.Media) == 0 {
-		return nil
-	}
-
-	err := os.MkdirAll(downloadDirectory, 0700)
-	if err != nil {
-		return fmt.Errorf("failed to create download directory: %w", err)
-	}
-
-	for _, media := range post.Media {
-		file, err := downloadMedia(media, downloadDirectory)
-		if err != nil {
-			return err
-		}
-		err = adjustFileTime(file, post.PublishedAt)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func main() {
 	if len(os.Args) == 1 {
 		fmt.Printf("patreon-crawler %s\n", version)
@@ -205,85 +178,27 @@ func main() {
 		panic("creator ID is required")
 	}
 
-	var groupingStrategy GroupingStrategy
+	var groupingStrategy crawling.GroupingStrategy
 	if argGroupingStrategy == "" {
-		groupingStrategy = GroupingStrategyNone
-	} else if isGroupingStrategy(GroupingStrategy(argGroupingStrategy)) {
-		groupingStrategy = GroupingStrategy(argGroupingStrategy)
+		groupingStrategy = crawling.GroupingStrategyNone
+	} else if isGroupingStrategy(crawling.GroupingStrategy(argGroupingStrategy)) {
+		groupingStrategy = crawling.GroupingStrategy(argGroupingStrategy)
 	} else {
 		panic("invalid grouping strategy. Must be one of: none, by-post")
 	}
 
-	cookie, err := getCookie()
-	if err != nil {
-		panic(err)
-	}
 	downloadDir, err := getDownloadDir()
 	if err != nil {
 		panic(err)
 	}
-	creatorDownloadDir := fmt.Sprintf("%s/%s", downloadDir, sanitizeFilename(argCreatorID))
 
-	fmt.Printf("Downloading posts from %s to %s\n", argCreatorID, creatorDownloadDir)
-
-	client, err := patreon.NewClient(api.NewClient(cookie), argCreatorID)
+	apiClient, err := getAPIClient()
 	if err != nil {
 		panic(err)
 	}
 
-	posts := client.Posts()
-
-	postsDownloaded := 0
-	postsCrawled := 0
-	for post, err := range posts {
-		if err != nil {
-			panic(err)
-		}
-
-		if postsDownloaded >= argDownloadLimit && argDownloadLimit != 0 {
-			break
-		}
-
-		if len(post.Media) == 0 {
-			fmt.Printf("[%d] Skipping post with no media '%s'\n", postsDownloaded, post.Title)
-			continue
-		}
-
-		postsCrawled++
-
-		if !post.CurrentUserCanView && !argDownloadInaccessibleMedia {
-			fmt.Printf("[%d] Skipping inaccessible post '%s'\n", postsDownloaded, post.Title)
-			continue
-		}
-
-		fmt.Printf("[%d] Saving post '%s'\n", postsDownloaded, post.Title)
-
-		err = nil
-		switch groupingStrategy {
-		case GroupingStrategyByPost:
-			postDownloadDirectory := fmt.Sprintf("%s/%s", creatorDownloadDir, sanitizeFilename(post.Title))
-			err = downloadPost(postDownloadDirectory, post)
-		case GroupingStrategyNone:
-			err = downloadPost(creatorDownloadDir, post)
-		default:
-			panic("invalid grouping strategy")
-		}
-		if err != nil {
-			panic(err)
-		}
-
-		postsDownloaded++
-	}
-	if postsCrawled == 0 {
-		fmt.Println("No posts found")
-	}
-
-	downloadedFraction := float64(postsDownloaded) / float64(postsCrawled)
-	if downloadedFraction < 0.8 {
-		if postsDownloaded == 0 {
-			fmt.Printf("Warning: No posts were downloaded. Did you provide a valid cookie string?\n")
-		} else {
-			fmt.Printf("Warning: Only %f%% of posts were downloaded. Did you provide a valid cookie string?\n", downloadedFraction*100)
-		}
+	err = crawling.CrawlCreator(apiClient, argCreatorID, downloadDir, argDownloadInaccessibleMedia, groupingStrategy, argDownloadLimit)
+	if err != nil {
+		panic(err)
 	}
 }
