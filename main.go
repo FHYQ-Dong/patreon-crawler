@@ -27,7 +27,7 @@ func init() {
 	flag.StringVar(&argCreatorID, "creator", "", "The creator ID to crawl")
 	flag.StringVar(&argCookie, "cookie", "", "The cookie to use for authentication")
 	flag.StringVar(&argDownloadDir, "download-dir", "", "The directory to download posts to")
-	flag.IntVar(&argDownloadLimit, "download-limit", 0, "The maximum number of media files to download")
+	flag.IntVar(&argDownloadLimit, "download-limit", 0, "The maximum number of posts to download")
 	flag.BoolVar(&argDownloadInaccessibleMedia, "download-inaccessible-media", false, "Whether to download inaccessible media")
 	flag.StringVar(&argGroupingStrategy, "grouping", "none", "The grouping strategy to use. Must be one of: none, by-post")
 	flag.Parse()
