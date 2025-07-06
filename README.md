@@ -35,6 +35,8 @@ You will be prompted to enter the cookie (the one you copied earlier) and a down
 
 If you do not wish do be prompted, you can also use the `--cookie` and `--download-dir` flag respectively.
 
+Note: The cookie will be cached after authenticating against patreon.com once and wont't be required in subsequent runs.
+
 ### Command line flags
 
 The `patreon-crawler` supports the following command line flags.
