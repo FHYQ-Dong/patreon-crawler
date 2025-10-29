@@ -6,7 +6,9 @@ import (
 	"iter"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 
 	"patreon-crawler/patreon"
 )
@@ -78,17 +80,66 @@ func Post(downloadDirectory string, post patreon.Post) iter.Seq[ReportItem] {
 			return
 		}
 
-		for _, media := range post.Media {
-			if media.MimeType == "" {
-				item := NewSkippedItem(media, "no mime type")
-				if !yield(item) {
-					return
-				}
-				continue
+		// Concurrency: default 8, can be overridden by environment variable
+		concurrency := 8
+		if v := os.Getenv("PATREON_CRAWLER_MEDIA_CONCURRENCY"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				concurrency = n
 			}
+		}
+		if concurrency > len(post.Media) {
+			concurrency = len(post.Media)
+		}
+		if concurrency <= 0 {
+			concurrency = 1
+		}
 
-			item := downloadMedia(media, downloadDirectory)
+		results := make(chan ReportItem, concurrency)
+		done := make(chan struct{})
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, concurrency)
+
+		// Spawn concurrent tasks
+		go func() {
+		loop:
+			for _, m := range post.Media {
+				select {
+				case <-done:
+					break loop
+				default:
+				}
+
+				if m.MimeType == "" {
+					item := NewSkippedItem(m, "no mime type")
+					select {
+					case results <- item:
+					case <-done:
+					}
+					continue
+				}
+
+				sem <- struct{}{}
+				wg.Add(1)
+				media := m
+				go func() {
+					defer func() { <-sem; wg.Done() }()
+					item := downloadMedia(media, downloadDirectory)
+					select {
+					case results <- item:
+					case <-done:
+					}
+				}()
+			}
+			wg.Wait()
+			close(results)
+		}()
+
+		// Consume results and yield
+		for item := range results {
 			if !yield(item) {
+				close(done)
+				for range results { // wait for all tasks to finish to avoid leaks
+				}
 				return
 			}
 		}
